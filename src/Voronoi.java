@@ -8,14 +8,20 @@ import java.util.Random;
  */
 
 /**
+ * Note: There's a potential bug in the partition method. There's a definite bug in
+ * private helper method logOldState, as well as in the public method hasChanged.
+ * We're working on fixing these methods as soon as possible.
+ *
  * @author admin
  *
  */
 public class Voronoi 
 {
-	private int dimension;
+	private final int dimension;
 	private HashSet<KdVector> vectors;
 	private HashSet<Centroid> centroids;
+	
+	private HashSet<Centroid> lastState;
 	
 	/**
 	 * 
@@ -32,6 +38,16 @@ public class Voronoi
 		this(dim);
 		vectors.addAll(vs);
 		centroids.addAll(cs);
+	}
+	
+	public Collection<KdVector> getVectors()
+	{
+		return vectors;
+	}
+	
+	public Collection<Centroid> getCentroids()
+	{
+		return centroids;
 	}
 	
 	public void addVector(KdVector v)
@@ -96,15 +112,18 @@ public class Voronoi
 	{
 		HashSet<Centroid> randCentroids = new HashSet<Centroid>(n);
 		
-		double[] randArr = new double[dimension];
+		double[] randArr;
 		Random generator = new Random();
 		Iterator<Centroid> iter;
 		Centroid temp;
+		
+		cents:
 		for (int i = 0; i < n; i++)
 		{
+			randArr = new double[dimension];
 			for (int j = 0; j < dimension; j++)
 			{
-				randArr[j] = generator.nextDouble()*(upper-lower) + lower;
+				randArr[j] = generator.nextDouble() * (upper - lower) + lower;
 			}
 			
 			temp = new Centroid(dimension, randArr);
@@ -116,39 +135,155 @@ public class Voronoi
 				if ((iter.next()).equals(temp))
 				{
 					i--;
-					continue;
+					continue cents;
 				}
 			}
 			
 			randCentroids.add(temp);
 		}
-		
+		centroids = randCentroids;
 	}
-	/*
-	 * Voronoi class - a Voronoi diagram splits a Euclidean space into sub-spaces
-	Initializer:
-	Set vectors 
-	Set dimensions - sets the parameters of our recommendation system (i.e. which qualities/aspects/interests weÕre using to base/influence our recommendations)
-	Each vector represents a personÕs interest in every parameter
-	Properties:
-	A sequence of dimensions (each dimension is associated with a parameter that influences our recommendation system, i.e. movies, books, etc.)
-	A set of centroids
-	Operations:
-	Distance between a centroid and a vector
-	Set centroids method - accepts an array of centroids as a parameter
-	Create a specific number of centroids - accepts the number of desired centroids as a parameter
-	Add, remove, and get centroids methods
-	an isEmpty method that checks if this Voronoi space has any centroids
-	Run LloydÕs algorithm method - run partitions until the configuration converges (i.e. two consecutive partitions do not change the board/location of centroids)
-	Partition - a function that executes one iteration of the LloydÕs algorithm
-	a method that checks if the set of centroids have stabilized
-	 */
+	
+	public boolean hasVectors()
+	{
+		return !vectors.isEmpty();
+	}
+	
+	public boolean hasCentroids()
+	{
+		return !centroids.isEmpty();
+	}
+	
+	public void clearCentroidVectors()
+	{
+		Iterator<Centroid> iter = centroids.iterator();
+		while (iter.hasNext())
+		{
+			(iter.next()).clearVectors();
+		}
+	}
+	
+	public void partition() throws Exception 
+	{
+		if (!hasCentroids() || !hasVectors())
+			return;
+		
+		logOldState();
+		
+		clearCentroidVectors();
+		
+		Iterator<KdVector> iterVect = vectors.iterator();
+		Iterator<Centroid> iterCent;
+		KdVector v;
+		Centroid c, smallest;
+		double distance, smallestDistance;
+		
+		while (iterVect.hasNext())
+		{
+			v = iterVect.next();
+			
+			iterCent = centroids.iterator();
+			
+			c = iterCent.next();
+			smallest = c;
+			smallestDistance = KdVector.distance(smallest, v);
+			/*
+			System.out.println(v);
+			System.out.println(c);
+			System.out.println(smallestDistance);
+			*/
+			while(iterCent.hasNext())
+			{
+				c = iterCent.next();
+				distance = KdVector.distance(c, v);
+				
+				/*
+				System.out.println(v);
+				System.out.println(c);
+				System.out.println(distance);
+				System.out.println(smallestDistance);
+				*/
+				
+				if (distance < smallestDistance)
+				{
+					smallest = c;
+					smallestDistance = distance;
+				}
+			} 
+			
+			smallest.addVector(v);
+		}
+	}
+	
+	public void setCentroidsAsMeans() throws Exception
+	{
+		Iterator<Centroid> iter = centroids.iterator();
+		Centroid cent;
+		while (iter.hasNext())
+		{
+			cent = iter.next();
+			cent.setAsMeans();
+		}
+	}
+	
+	private void logOldState()
+	{
+		lastState = (HashSet<Centroid>) centroids.clone();
+	}
+	
+	public boolean hasChanged()
+	{
+		return !lastState.equals(centroids);
+	}
+	
+	public void lloydsAlgorithm() throws Exception
+	{
+		do {
+			partition();
+			setCentroidsAsMeans();
+		} while (!hasChanged());
+	}
+	
 	/**
 	 * @param args
+	 * @throws Exception 
 	 */
-	public static void main(String[] args) {
-		// TODO Auto-generated method stub
-
+	public static void main(String[] args) throws Exception {
+		double[] a1 = {-1, -3};
+		KdVector v1 = new KdVector(2, a1);
+		double[] a2 = {1, 3};
+		KdVector v2 = new KdVector(2, a2);
+		double[] a3 = {-4, 6};
+		KdVector v3 = new KdVector(2, a3);
+		double[] a4 = {0, 0};
+		KdVector v4 = new KdVector(2, a4);
+		double[] a5 = {8, -3};
+		KdVector v5 = new KdVector(2, a5);
+		Voronoi vor = new Voronoi(2);
+		vor.addVector(v1);
+		vor.addVector(v2);
+		vor.addVector(v3);
+		vor.addVector(v4);
+		vor.addVector(v5);
+		vor.setCentroids(3, -3, 3);
+		
+		Iterator<Centroid> it1 = vor.getCentroids().iterator();
+		while (it1.hasNext())
+		{
+			System.out.println(it1.next());
+		}
+		
+		do {
+			vor.partition();
+			vor.setCentroidsAsMeans();
+			System.out.println("Partition:");
+			Iterator<Centroid> it2 = vor.getCentroids().iterator();
+			while (it2.hasNext())
+			{
+				System.out.println(it2.next());
+			}
+		} while (vor.hasChanged());
+		
 	}
 
 }
